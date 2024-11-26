@@ -42,7 +42,7 @@
     <parent link="root"/>
     <child link="virtual_0"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-1" upper="1" effort="200" velocity="1.0"/>
+    <limit lower="-1" upper="1" effort="1000" velocity="1.0"/>
     <dynamics damping="0.0" friction="0.0"/>
   </joint>
 
@@ -50,14 +50,14 @@
     <parent link="virtual_0"/>
     <child link="virtual_1"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-1" upper="1" effort="200" velocity="1.0"/>
+    <limit lower="-1" upper="1" effort="1000" velocity="1.0"/>
   </joint>
 
   <joint name="joint_2" type="revolute">
     <parent link="virtual_1"/>
     <child link="hand"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-1.57" upper="1.57" effort="200" velocity="1.0"/>
+    <limit lower="-1.57" upper="1.57" effort="1000" velocity="1.0"/>
   </joint>
 
 </robot>

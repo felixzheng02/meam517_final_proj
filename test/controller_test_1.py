@@ -29,14 +29,14 @@ cubeId = p.createMultiBody(cubeMass, cubeCollisionShapeId, cubeVisualShapeId, cu
 robotStartPos = [0, -0.04, .2]
 # robotStartOrientation = [0, 0, 0]
 robotStartOrientation = cubeStartOrientation
-w0 = [0, -90, 1]
+w0 = [0, -200, 1]
 robotId = p.loadURDF("src/urdf/robot.urdf", 
                         basePosition=robotStartPos, 
                         baseOrientation=robotStartOrientation, 
                         useFixedBase=True)
 
 w_lim = np.array([200, 200, 200])
-K = 1000000*np.array([[1, 0, 0],
+K = 10000*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
 
@@ -61,6 +61,7 @@ p.setJointMotorControl2(robotId, 2, p.VELOCITY_CONTROL, force=0)
 # p.enableJointForceTorqueSensor(robotId, 0)
 w = w0
 w_hist = []
+
 cost_hist = []
 # for i in range(50): # wait till hand in line contact with object
 #     p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=w[0])
@@ -76,8 +77,8 @@ try:
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
         # print(theta)
-        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], sh_s[i], .1, 0, w[:2], world_to_robot_frame(w[:2], theta), w[2], 1, 1, theta, .05, np.array([200, 200, 200]), K)
-        print(f"delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
+        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], sh_s[i], .1, 0, w[:2], world_to_robot_frame(w[:2], theta), w[2], 1, 1, theta, .05, np.array([200, 200, 200]), K, False, True, True, False)
+        print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
         w[2] += delta_torque[0]
         # print(w)

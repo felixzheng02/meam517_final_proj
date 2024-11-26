@@ -16,42 +16,44 @@ p.setGravity(0, 0, -9.8)
 
 planeId = p.loadURDF("plane.urdf")
 
-orientation = [np.pi/5, 0, 0]
-# Create cube
-cubeStartPos = [0, 0, .1]
-cubeSize = [.1, .1, .1]
-cubeStartOrientation = p.getQuaternionFromEuler(orientation)
-cubeCollisionShapeId = p.createCollisionShape(p.GEOM_BOX, halfExtents=cubeSize)
-cubeVisualShapeId = p.createVisualShape(p.GEOM_BOX, halfExtents=cubeSize, rgbaColor=[1, 0, 0, 1])
-cubeMass = 10
-cubeId = p.createMultiBody(cubeMass, cubeCollisionShapeId, cubeVisualShapeId, cubeStartPos, cubeStartOrientation)
+orientation = [np.pi/2, 0, 0]
+# Create obj
+objStartPos = [0, 0, .1]
+objSize = [.1, .1, .1]
+objStartOrientation = p.getQuaternionFromEuler(orientation)
+objCollisionShapeId = p.createCollisionShape(p.GEOM_MESH, fileName='src/object0.obj', meshScale=[.1, .1, .1])
+objVisualShapeId = p.createVisualShape(p.GEOM_MESH, fileName='src/object0.obj', meshScale=[.1, .1, .1], rgbaColor=[1, 0, 0, 1])
+objMass = 1
+objId = p.createMultiBody(objMass, objCollisionShapeId, objVisualShapeId, objStartPos, objStartOrientation)
 
-robotStartPos = [0, -0.04, .2]
+
+robotStartPos = [0, 0, .2]
 # robotStartOrientation = [0, 0, 0]
-robotStartOrientation = cubeStartOrientation
-w0 = [0, -90, 1]
+robotStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
+w0 = [0, -10, 0]
 robotId = p.loadURDF("src/urdf/robot.urdf", 
                         basePosition=robotStartPos, 
                         baseOrientation=robotStartOrientation, 
                         useFixedBase=True)
 
 w_lim = np.array([200, 200, 200])
-K = 1000000*np.array([[1, 0, 0],
+K = 10*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
 
-theta_s = [.5]*100
-sh_s = [0]*100
+n = 10000
+theta_s = [0]*n
+sh_s = [0]*n
 controller = Controller()
-p.changeDynamics(cubeId, -1, lateralFriction=1)
-p.changeDynamics(robotId, -1, lateralFriction=1)
+p.changeDynamics(objId, -1, lateralFriction=.1)
+p.changeDynamics(robotId, -1, lateralFriction=.1)
 
-cubeFriction = p.getDynamicsInfo(cubeId, -1)[1]
+objFriction = p.getDynamicsInfo(objId, -1)[1]
 planeFriction = p.getDynamicsInfo(planeId, -1)[1]
 robotFriction = p.getDynamicsInfo(robotId, -1)[1]
-print("Cube friction coefficient:", cubeFriction)
+print("obj friction coefficient:", objFriction)
 print("Plane friction coefficient:", planeFriction)
-print("Cube friction coefficient:", robotFriction)
+print("obj friction coefficient:", robotFriction)
 
 steps = len(theta_s)
 p.setJointMotorControl2(robotId, 0, p.VELOCITY_CONTROL, force=0)
@@ -61,6 +63,7 @@ p.setJointMotorControl2(robotId, 2, p.VELOCITY_CONTROL, force=0)
 # p.enableJointForceTorqueSensor(robotId, 0)
 w = w0
 w_hist = []
+delta_x_tar_hist = []
 cost_hist = []
 # for i in range(50): # wait till hand in line contact with object
 #     p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=w[0])
@@ -76,8 +79,9 @@ try:
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
         # print(theta)
-        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], sh_s[i], .1, 0, w[:2], world_to_robot_frame(w[:2], theta), w[2], 1, 1, theta, .05, np.array([200, 200, 200]), K)
-        print(f"delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
+        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], sh_s[i], .1, 0, w[:2], world_to_robot_frame(w[:2], theta), w[2], .1, .1, theta, .05, np.array([200, 200, 200]), K, True, True, True, True)
+        delta_x_tar_hist.append(delta_x_tar)
+        print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
         w[2] += delta_torque[0]
         # print(w)
@@ -100,5 +104,6 @@ except KeyboardInterrupt:
     p.disconnect()
 
 # print(w_hist)
-plot(np.array(w_hist), 3)
-plot(np.array(cost_hist), 1)
+plot(np.array(w_hist), 3, ['y', 'z', 'theta'])
+plot(np.array(delta_x_tar_hist), 3, ['y', 'z', 'theta'])
+plot(np.array(cost_hist))
