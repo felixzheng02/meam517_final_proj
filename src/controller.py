@@ -16,7 +16,7 @@ class Controller:
         if type(torque) == np.ndarray:
             torque = torque[0]
 
-        v_theta = np.array([-d, sh, 1]).T # hand frame
+        v_theta = np.array([d, 0, 1]).T # hand frame
         v_h = np.array([-1, 0, 0]) # hand frame
         v_g = np.array([1, 0, 0]) # world_frame
 
@@ -29,7 +29,7 @@ class Controller:
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
         delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame
 
-        prog.AddQuadraticCost((delta_x_tar.T @ v_theta - delta_theta) ** 2)
+        prog.AddQuadraticCost(10*(delta_x_tar.T @ v_theta - delta_theta) ** 2)
         # prog.AddQuadraticCost((delta_x_tar.T @ v_h - delta_sh) ** 2)
 
         f_grav_j = -9.81

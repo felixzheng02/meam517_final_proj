@@ -31,14 +31,3 @@ def plot(input, d=1, labels=None):
             plt.plot(time_steps, input[:, i], label=labels[i])
 
     plt.show()
-
-def plot1d(input):
-    n = input.shape[0]
-    time_steps = np.arange(n)
-
-    # Plot each of the 3 columns
-    plt.figure(figsize=(10, 6))
-    plt.plot(time_steps, input, label='cost')
-
-    # Show the plot
-    plt.show()

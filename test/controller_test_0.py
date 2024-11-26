@@ -37,7 +37,7 @@ robotId = p.loadURDF("src/urdf/robot.urdf",
                         useFixedBase=True)
 
 w_lim = np.array([200, 200, 200])
-K = 10*np.array([[1, 0, 0],
+K = 2*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
 
@@ -46,7 +46,8 @@ theta_s = [0]*n
 sh_s = [0]*n
 controller = Controller()
 p.changeDynamics(objId, -1, lateralFriction=.1)
-p.changeDynamics(robotId, -1, lateralFriction=.1)
+p.changeDynamics(robotId, -1, lateralFriction=10)
+p.changeDynamics(planeId, -1, lateralFriction=10)
 
 objFriction = p.getDynamicsInfo(objId, -1)[1]
 planeFriction = p.getDynamicsInfo(planeId, -1)[1]
@@ -75,11 +76,29 @@ cost_hist = []
 try:
     for i in range(steps): # control
         # print(i)
+        if i == 310:
+            pass
         hand_pos = p.getLinkState(robotId, 2)[0]
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
         # print(theta)
-        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], sh_s[i], .1, 0, w[:2], world_to_robot_frame(w[:2], theta), w[2], .1, .1, theta, .05, np.array([200, 200, 200]), K, True, True, True, True)
+        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
+                                                                              sh_s[i], 
+                                                                              d=.1, 
+                                                                              sh=0, 
+                                                                              fw=w[:2], 
+                                                                              fr=world_to_robot_frame(w[:2], theta), 
+                                                                              torque=w[2], 
+                                                                              mu_h=.1, 
+                                                                              mu_g=10, 
+                                                                              theta=theta, 
+                                                                              l=.05, 
+                                                                              wrench_lim=np.array([200, 200, 200]), 
+                                                                              K=K, 
+                                                                              hand_sliding_constraint_on=True, 
+                                                                              hand_pivoting_constraint_on=True, 
+                                                                              ground_sliding_constraint_on=True, 
+                                                                              w_lim_on=False)
         delta_x_tar_hist.append(delta_x_tar)
         print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
