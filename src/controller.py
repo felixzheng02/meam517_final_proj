@@ -25,30 +25,38 @@ class Controller:
 
         prog = MathematicalProgram()
         delta_f = prog.NewContinuousVariables(2, 'delta_f') # [2,] world frame
-        delta_f_r = self.world_to_robot_frame(delta_f, theta) # hand frame
+        delta_f_r = prog.NewContinuousVariables(2, 'delta_f_r') # hand frame
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
         delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame
+        lambda_theta = 100    # Weight for angular deviation (existing)
+        # lambda_f_r = 1       # Weight for delta_f_r regularization
+        lambda_f = .01         # Weight for delta_f regularization
+        lambda_torque = .01    # Weight for delta_torque regularization
+        # Existing cost on angular deviation
+        prog.AddQuadraticCost(lambda_theta * (theta + delta_x_tar.T @ v_theta - theta_tar) ** 2)
 
-        prog.AddQuadraticCost(10*(delta_x_tar.T @ v_theta - delta_theta) ** 2)
-        # prog.AddQuadraticCost((delta_x_tar.T @ v_h - delta_sh) ** 2)
+        # New regularization terms to penalize large adjustments
+        # prog.AddQuadraticCost(lambda_f_r * delta_f_r.T @ delta_f_r)
+        prog.AddQuadraticCost(lambda_f * delta_f.T @ delta_f)
+        prog.AddQuadraticCost(lambda_torque * delta_torque[0] ** 2)        # prog.AddQuadraticCost((delta_x_tar.T @ v_h - delta_sh) ** 2)
 
         f_grav_j = -9.81
-        gammas = np.array([1, 1, 1, 1, 1, 1])
+        gammas = .5 * np.array([1, 1, 1, 1, 1, 1])
         # if delta_sh > 0:
         
         # hand sliding
         if hand_sliding_constraint_on:
             hand_sliding_constraint_0 = mu_h * (fn+gammas[0]*delta_f_r[1]) + (ft+gammas[0]*delta_f_r[0])
             hand_sliding_constraint_1 = mu_h * (fn+gammas[1]*delta_f_r[1]) - (ft+gammas[1]*delta_f_r[0])
-            if delta_sh > 0:
-                prog.AddConstraint(hand_sliding_constraint_0 == 0)
-                prog.AddConstraint(hand_sliding_constraint_1 >= 0)
-            elif delta_sh < 0:
-                prog.AddConstraint(hand_sliding_constraint_0 >= 0)
-                prog.AddConstraint(hand_sliding_constraint_1 == 0)
-            else:
-                prog.AddConstraint(hand_sliding_constraint_0 >= 0)
-                prog.AddConstraint(hand_sliding_constraint_1 >= 0)
+            # if delta_sh > 0:
+            #     prog.AddConstraint(hand_sliding_constraint_0 == 0)
+            #     prog.AddConstraint(hand_sliding_constraint_1 >= 0)
+            # elif delta_sh < 0:
+            #     prog.AddConstraint(hand_sliding_constraint_0 >= 0)
+            #     prog.AddConstraint(hand_sliding_constraint_1 == 0)
+            # else:
+            prog.AddConstraint(hand_sliding_constraint_0 >= 0)
+            prog.AddConstraint(hand_sliding_constraint_1 >= 0)
         if hand_pivoting_constraint_on:# hand pivoting
             hand_pivoting_constraint_0 = l * (fn+gammas[2]*delta_f_r[1]) - (torque+gammas[2]*delta_torque[0])
             hand_pivoting_constraint_1 = l * (fn+gammas[3]*delta_f_r[1]) + (torque+gammas[3]*delta_torque[0])
@@ -69,32 +77,37 @@ class Controller:
             prog.AddConstraint(fw[1]+delta_f[1] >= -wrench_lim[1])
             prog.AddConstraint(torque+delta_torque[0] >= -wrench_lim[2])
 
-        # compliance law
-        vars = np.concatenate((delta_f, delta_torque, delta_x_tar))
-        
-        # delta_w - K @ delta_x_tar == 0
-        # A_eq = [[1, 0, 0, -K_00, 0, 0]
-        #         [0, 1, 0, 0, -K_11, 0]
-        #         [0, 0, 1, 0, 0, -K_22]]
-        
         R_11 = -np.cos(theta)
         R_12 = np.sin(theta)
         R_21 = -np.sin(theta)
         R_22 = -np.cos(theta)
+
+        prog.AddLinearEqualityConstraint(np.array([[R_11, R_12, -1, 0], 
+                                                   [R_21, R_22, 0, -1]]),
+                                         np.zeros(2), 
+                                         np.concatenate((delta_f_r, delta_f)))
+        
+        
+        vars = np.concatenate((delta_f_r, delta_torque, delta_x_tar))
+        
+        # compliance law
+        # A_eq = [[1, 0, 0, -K_00, 0, 0]
+        #         [0, 1, 0, 0, -K_11, 0]
+        #         [0, 0, 1, 0, 0, -K_22]]
         A_eq = np.zeros((3, 6))
         # First equation coefficients
         
-        A_eq[0, 0] = R_11       # Coefficient for delta_f[0]
-        A_eq[0, 1] = R_12       # Coefficient for delta_f[1]
+        # A_eq[0, 0] = R_11       # Coefficient for delta_f[0]
+        # A_eq[0, 1] = R_12       # Coefficient for delta_f[1]
         
-        # A_eq[0, 0] = 1
+        A_eq[0, 0] = 1
         A_eq[0, 3] = -K[0, 0]   # Coefficient for delta_x_tar[0]
         # Second equation coefficients
        
-        A_eq[1, 0] = R_21       # Coefficient for delta_f[0]
-        A_eq[1, 1] = R_22       # Coefficient for delta_f[1]
+        # A_eq[1, 0] = R_21       # Coefficient for delta_f[0]
+        # A_eq[1, 1] = R_22       # Coefficient for delta_f[1]
         
-        # A_eq[1, 1] = 1
+        A_eq[1, 1] = 1
         A_eq[1, 4] = -K[1, 1]   # Coefficient for delta_x_tar[1]
         # Third equation: delta_torque[0] - K[2,:] * delta_x_tar = 0
         A_eq[2, 2] = 1  # Coefficient for delta_torque[0]
@@ -104,11 +117,21 @@ class Controller:
         # Add the linear equality constraint
         prog.AddLinearEqualityConstraint(A_eq, b_eq, vars)
 
+        delta_x_tar_range = np.array([.1, .1, .05])
+        for i in range(3):
+            prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
+            prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
+
         solver = OsqpSolver()
         result = solver.Solve(prog)
         optimal_cost = result.get_optimal_cost()
-        # print(result.GetSolution(delta_f)[0])
-        return result.GetSolution(delta_f), result.GetSolution(delta_torque), result.GetSolution(delta_x_tar), optimal_cost
+        delta_f_sol = result.GetSolution(delta_f)
+        delta_torque_sol = result.GetSolution(delta_torque)
+        delta_x_tar_sol = result.GetSolution(delta_x_tar)
+        if np.any(np.isnan(delta_f_sol)) or np.any(np.isnan(delta_torque_sol)) or np.any(np.isnan(delta_x_tar_sol)):
+            print("Nan detected")
+            raise Exception
+        return delta_f_sol, delta_torque_sol, delta_x_tar_sol, optimal_cost
     
     def world_to_robot_frame(self, input, theta):
         """input: dim=2, can contain symbolic variables."""
@@ -126,16 +149,3 @@ class Controller:
         output_1 = R_21 * input[0] + R_22 * input[1]
 
         return [output_0, output_1]
-
-    # def solve_QP(self):
-    #     return delta_w, delta_x
-    
-    # def formulate_QP(self, mode, delta):
-    #     """
-    #     input:
-    #         mode: current contact mode
-    #         delta: [delta_hand, delta_ground, delta_theta]
-    #     """
-    #     prog = MathematicalProgram()
-    #     if delta[0] != 0:
-    #         prog.Add

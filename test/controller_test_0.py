@@ -37,7 +37,7 @@ robotId = p.loadURDF("src/urdf/robot.urdf",
                         useFixedBase=True)
 
 w_lim = np.array([200, 200, 200])
-K = 2*np.array([[1, 0, 0],
+K = 10*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
 
@@ -82,23 +82,27 @@ try:
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
         # print(theta)
-        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
-                                                                              sh_s[i], 
-                                                                              d=.1, 
-                                                                              sh=0, 
-                                                                              fw=w[:2], 
-                                                                              fr=world_to_robot_frame(w[:2], theta), 
-                                                                              torque=w[2], 
-                                                                              mu_h=.1, 
-                                                                              mu_g=10, 
-                                                                              theta=theta, 
-                                                                              l=.05, 
-                                                                              wrench_lim=np.array([200, 200, 200]), 
-                                                                              K=K, 
-                                                                              hand_sliding_constraint_on=True, 
-                                                                              hand_pivoting_constraint_on=True, 
-                                                                              ground_sliding_constraint_on=True, 
-                                                                              w_lim_on=False)
+        try:
+            delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
+                                                                                sh_s[i], 
+                                                                                d=.1, 
+                                                                                sh=0, 
+                                                                                fw=w[:2], 
+                                                                                fr=world_to_robot_frame(w[:2], theta), 
+                                                                                torque=w[2], 
+                                                                                mu_h=.1, 
+                                                                                mu_g=10, 
+                                                                                theta=theta, 
+                                                                                l=.05, 
+                                                                                wrench_lim=np.array([200, 200, 200]), 
+                                                                                K=K, 
+                                                                                hand_sliding_constraint_on=True, 
+                                                                                hand_pivoting_constraint_on=True, 
+                                                                                ground_sliding_constraint_on=True, 
+                                                                                w_lim_on=False)
+        except:
+            p.disconnect()
+            break
         delta_x_tar_hist.append(delta_x_tar)
         print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
