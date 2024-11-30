@@ -1,5 +1,7 @@
 from pydrake.all import (MathematicalProgram, OsqpSolver)
 from pydrake.symbolic import cos, sin, Expression
+from pydrake.solvers import SolverOptions
+from pydrake.solvers import ScsSolver
 import numpy as np
 
 
@@ -9,6 +11,8 @@ class Controller:
         pass
 
     def control(self, theta_tar, sh_tar, d, sh, fw, fr, torque, mu_h, mu_g, theta, l, wrench_lim, K, hand_sliding_constraint_on=True, hand_pivoting_constraint_on=True, ground_sliding_constraint_on=True, w_lim_on=True):
+
+        check_for_nan_inf(theta_tar, sh_tar, d, sh, fw, fr, torque, mu_h, mu_g, theta, l, wrench_lim, K)
         ft, fn = fr
         fi, fj = fw
         fw = np.array([fi, fj])
@@ -28,10 +32,10 @@ class Controller:
         delta_f_r = prog.NewContinuousVariables(2, 'delta_f_r') # hand frame
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
         delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame
-        lambda_theta = 100    # Weight for angular deviation (existing)
+        lambda_theta = 1000    # Weight for angular deviation (existing)
         # lambda_f_r = 1       # Weight for delta_f_r regularization
-        lambda_f = .01         # Weight for delta_f regularization
-        lambda_torque = .01    # Weight for delta_torque regularization
+        lambda_f = .1         # Weight for delta_f regularization
+        lambda_torque = .1    # Weight for delta_torque regularization
         # Existing cost on angular deviation
         prog.AddQuadraticCost(lambda_theta * (theta + delta_x_tar.T @ v_theta - theta_tar) ** 2)
 
@@ -70,6 +74,7 @@ class Controller:
             prog.AddConstraint(ground_sliding_constraint_1 >= 0)
         
         if w_lim_on:
+            # prog.AddBoundingBoxConstraint(-wrench_lim[0], wrench_lim[:2], fw)
             prog.AddConstraint(fw[0]+delta_f[0] <= wrench_lim[0])
             prog.AddConstraint(fw[1]+delta_f[1] <= wrench_lim[1])
             prog.AddConstraint(torque+delta_torque[0] <= wrench_lim[2])
@@ -122,8 +127,13 @@ class Controller:
             prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
             prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
 
-        solver = OsqpSolver()
-        result = solver.Solve(prog)
+        solver = ScsSolver()
+        solver_options = SolverOptions()
+        solver_options.SetOption(solver.solver_id(), "verbose", True)
+        result = solver.Solve(prog, None, solver_options)
+        if result.is_success() is False:
+            print("Solver failed.")
+            return np.zeros(2), np.zeros(1), np.zeros(3), -1
         optimal_cost = result.get_optimal_cost()
         delta_f_sol = result.GetSolution(delta_f)
         delta_torque_sol = result.GetSolution(delta_torque)
@@ -149,3 +159,9 @@ class Controller:
         output_1 = R_21 * input[0] + R_22 * input[1]
 
         return [output_0, output_1]
+    
+
+def check_for_nan_inf(*args):
+            for idx, arg in enumerate(args):
+                if np.isnan(arg).any() or np.isinf(arg).any():
+                    print(f"Input argument {idx} contains NaN or Inf values.")

@@ -74,16 +74,13 @@ cost_hist = []
 #     time.sleep(1./240.)
 # robot.sh = 0
 try:
-    for i in range(steps): # control
-        # print(i)
-        if i == 310:
-            pass
+    for i in range(steps):
         hand_pos = p.getLinkState(robotId, 2)[0]
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
         # print(theta)
-        try:
-            delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
+        # try:
+        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
                                                                                 sh_s[i], 
                                                                                 d=.1, 
                                                                                 sh=0, 
@@ -99,12 +96,12 @@ try:
                                                                                 hand_sliding_constraint_on=True, 
                                                                                 hand_pivoting_constraint_on=True, 
                                                                                 ground_sliding_constraint_on=True, 
-                                                                                w_lim_on=False)
-        except:
-            p.disconnect()
-            break
+                                                                                w_lim_on=True)
+        # except:
+        #     p.disconnect()
+        #     break
         delta_x_tar_hist.append(delta_x_tar)
-        print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
+        # print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
         w[2] += delta_torque[0]
         # print(w)
