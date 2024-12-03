@@ -41,7 +41,7 @@ K = 10*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
 
-n = 10000
+n = 1000
 theta_s = [0]*n
 sh_s = [0]*n
 controller = Controller()
@@ -75,6 +75,7 @@ cost_hist = []
 # robot.sh = 0
 try:
     for i in range(steps):
+        print(i)
         hand_pos = p.getLinkState(robotId, 2)[0]
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]

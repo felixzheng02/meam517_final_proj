@@ -64,7 +64,7 @@ class Estimator:
         """
         input: thetas: [n,]
         r_h: [n, 2] = (x_h, y_h), n: number of samples
-        regress d, x_o, y_o
+        regress d, x_o, y_o (hand frame)
         """
         n = thetas.shape[0]
         thetas = thetas.reshape([n, 1])
@@ -72,10 +72,11 @@ class Estimator:
 
         A = np.hstack([-np.ones([n, 1]), np.sin(thetas), -np.cos(thetas)])
         b = np.sum(rh * e_hn, axis=1)
-        result = lsq_linear(A, b, bounds=[[-np.inf, np.inf], [-1, 1], [-1, 1]])
+        lb = np.array([0, -1, -2])
+        ub = np.array([np.inf, 1, 0])
+        result = lsq_linear(A, b, bounds=(lb, ub))
         # result, _, _, _ = np.linalg.lstsq(A, b, None)
-        print(result['x'])
-        d, xo, yo = result.flatten()
+        d, xo, yo = result.x
         return d, xo, yo
     
     def est_mu(self, ft, fn, fi, fj):

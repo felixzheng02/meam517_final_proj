@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, '/Users/felix/Desktop/meam5170/final_project/src')
-from estimator import Estimator
+from robot import Robot
 from utils import world_to_robot_frame, plot
 import numpy as np
 import pybullet as p
@@ -44,46 +44,46 @@ print("Plane friction coefficient:", planeFriction)
 print("obj friction coefficient:", robotFriction)
 
 # robot parameters
+n = 1000
+theta_s = [0]*n
+sh_s = [0]*n
 w_lim = np.array([200, 200, 200])
 K = 10*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
-ws = [[0, -10, 0]]
-for i in range(10):
-    for j in range(10):
-        ws.append([10, -10, 0])
-    for j in range(10):
-        ws.append([-15, -10, 0])
-
-estimator = Estimator(.05, .1, .1)
-
-steps = len(ws)-1
-mu_s = []
-xo_yo_d_sh_s = []
+w = [0, -10, 0]
+robot = Robot(robotStartPos[1], 
+              robotStartPos[2], 
+              0,
+              w, 
+              0.1, 
+              w_lim, 
+              K, 
+              theta_s, 
+              sh_s)
+w_s = []
 
 try:
-    for i in range(steps):
+    for i in range(n):
+        print(i)
         hand_pos = p.getLinkState(robotId, 2)[0]
         pos = np.array(hand_pos[:2])
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
 
-        fr = world_to_robot_frame(ws[i][:2], theta)
-        hand_mu, ground_mu = estimator.est_mu(fr[0], fr[1], ws[i][0], ws[i][1])
-        mu_s.append([hand_mu, ground_mu])
-        xo, yo, d, sh = estimator.kinemitcs_est(pos, theta)
-        xo_yo_d_sh_s.append([xo, yo, d, sh])
+        robot.update_pose(pos[0], pos[1], theta)
+        w = robot.joint_estimate_control(i)
+        w_s.append(w)
 
-        print(f"hand_mu={hand_mu:.3f},  ground_mu={ground_mu:.3f}")
-        print(f"xo={xo:.3f}, yo={yo:.3f}, d={d:.3f}, sh={d:.3f}")
+        # print(f"y={w[0]:.3f}, z={w[1]:.3f}, torque={w[2]:.3f}")
         
-        p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=ws[i+1][0])
-        p.setJointMotorControl2(robotId, 1, p.TORQUE_CONTROL, force=ws[i+1][1])
-        p.setJointMotorControl2(robotId, 2, p.TORQUE_CONTROL, force=ws[i+1][2])
+        p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=w[0])
+        p.setJointMotorControl2(robotId, 1, p.TORQUE_CONTROL, force=w[1])
+        p.setJointMotorControl2(robotId, 2, p.TORQUE_CONTROL, force=w[2])
         p.stepSimulation()
         time.sleep(1./240.)
 except KeyboardInterrupt:
     p.disconnect()
 
-plot(np.array(mu_s), 2, ['hand_mu', 'ground_mu'])
-plot(np.array(xo_yo_d_sh_s), 4, ['xo', 'yo', 'd', 'sh'])
+plot(np.array(w_s)[:, :2], 2, ['force_y', 'force_z'])
+plot(np.array(w_s)[:, 2], 1, ['torque'])

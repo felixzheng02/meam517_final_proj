@@ -4,7 +4,7 @@ import numpy as np
 
 class Robot:
 
-    def __init__(self, x0, y0, theta0, w0, l, w_lim, K, theta_o_s, sh_s):
+    def __init__(self, x0, y0, theta0, w0, l, w_lim, K, theta_s, sh_s):
         self.x = x0
         self.y = y0
         self.theta = theta0
@@ -15,7 +15,7 @@ class Robot:
         self.l = l
         self.estimator = Estimator(l, 0.1, 0.1)
         self.controller = Controller()
-        self.theta_o_s = theta_o_s
+        self.theta_s = theta_s
         self.sh_s = sh_s
         self.w_lim = w_lim
         self.K = K
@@ -55,7 +55,7 @@ class Robot:
         self.xo, self.yo, self.d, self.sh = self.estimator.kinemitcs_est(np.array([self.x, self.y]), self.theta)
 
         # control
-        delta_f, delta_torque, delta_x_tar = self.controller.control(self.theta_o_s[i], self.sh_s[i], self.d, self.sh, self.fw, self.fr, self.torque, hand_mu, ground_mu, self.theta, self.l, self.w_lim, self.K)
+        delta_f, delta_torque, delta_x_tar, optimal_cost = self.controller.control(self.theta_s[i], self.sh_s[i], self.d, self.sh, self.fw, self.fr, self.torque, hand_mu, ground_mu, self.theta, self.l, self.w_lim, self.K)
         # print(f"delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         self.update_w(delta_f, delta_torque[0])
         return self.w
