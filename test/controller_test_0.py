@@ -73,18 +73,37 @@ cost_hist = []
 #     p.stepSimulation()
 #     time.sleep(1./240.)
 # robot.sh = 0
+
+aabb_min, aabb_max = p.getAABB(objId)
+d = aabb_max[2] - aabb_min[2]
+# Visualization scaling factors
+force_scale = 1  # Scale for the force vector
+torque_scale = 0.05  # Scale for the torque vector
+
 try:
     for i in range(steps):
+        p.removeAllUserDebugItems()
+        
         print(i)
-        hand_pos = p.getLinkState(robotId, 2)[0]
+
+        obj_pos_ori = p.getBasePositionAndOrientation(objId)
+        obj_pos = [obj_pos_ori[0][1], 0]
+        obj_orientation = p.getEulerFromQuaternion(obj_pos_ori[1])[0] - orientation[0]
+        # Get the axis-aligned bounding box (AABB) of the object
+        
+        sh_origin = [np.sin(obj_orientation)*d, np.cos(obj_orientation)*d]
+
+        hand_pos = p.getLinkState(robotId, 2)[0][1:]
         hand_orientation = p.getEulerFromQuaternion(p.getLinkState(robotId, 2)[1])
         theta = hand_orientation[0]
+        sh = np.linalg.norm(np.array(hand_pos)-np.array(sh_origin))
+        print(sh)
         # print(theta)
-        # try:
-        delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
+        try:
+            delta_f, delta_torque, delta_x_tar, optimal_cost = controller.control(theta_s[i], 
                                                                                 sh_s[i], 
-                                                                                d=.1, 
-                                                                                sh=0, 
+                                                                                d=d, 
+                                                                                sh=sh, 
                                                                                 fw=w[:2], 
                                                                                 fr=world_to_robot_frame(w[:2], theta), 
                                                                                 torque=w[2], 
@@ -98,9 +117,9 @@ try:
                                                                                 hand_pivoting_constraint_on=True, 
                                                                                 ground_sliding_constraint_on=True, 
                                                                                 w_lim_on=True)
-        # except:
-        #     p.disconnect()
-        #     break
+        except:
+            p.disconnect()
+            break
         delta_x_tar_hist.append(delta_x_tar)
         # print(f"time {i}: delta_f={delta_f}, delta_torque={delta_torque}, delta_x_tar={delta_x_tar}")
         w[:2] += delta_f
@@ -111,6 +130,32 @@ try:
         p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=w[0])
         p.setJointMotorControl2(robotId, 1, p.TORQUE_CONTROL, force=w[1])
         p.setJointMotorControl2(robotId, 2, p.TORQUE_CONTROL, force=w[2])
+
+        # Draw force vector w[:2]
+        force_start = p.getBasePositionAndOrientation(robotId)[0]
+        fy_end = [
+            force_start[0],
+            force_start[1] + w[0] * force_scale,
+            force_start[2]
+        ]
+        p.addUserDebugLine(force_start, fy_end, lineColorRGB=[0, 1, 0], lineWidth=10)
+        fz_end = [
+            force_start[0],
+            force_start[1],
+            force_start[2] + w[1] * force_scale
+        ]
+        p.addUserDebugLine(force_start, fz_end, lineColorRGB=[0, 0, 1], lineWidth=10)
+
+        # # Draw torque vector w[2]
+        # torque_start = force_start
+        # torque_end = [
+        #     torque_start[0],
+        #     torque_start[1],
+        #     torque_start[2] + w[2] * torque_scale
+        # ]
+        # p.addUserDebugLine(torque_start, torque_end, lineColorRGB=[0, 0, 1], lineWidth=3)
+
+
         p.stepSimulation()
         time.sleep(1./240.)
 
@@ -125,6 +170,6 @@ except KeyboardInterrupt:
     p.disconnect()
 
 # print(w_hist)
-plot(np.array(w_hist), 3, ['y', 'z', 'theta'])
-plot(np.array(delta_x_tar_hist), 3, ['y', 'z', 'theta'])
+plot(np.array(w_hist), 3, ['fy', 'fz', 'torque'])
+plot(np.array(delta_x_tar_hist), 3, ['delta_x_tar_y', 'delta_x_tar_z', 'delta_x_tar_theta'])
 plot(np.array(cost_hist))

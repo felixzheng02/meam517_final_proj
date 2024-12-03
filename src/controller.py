@@ -21,7 +21,7 @@ class Controller:
         if type(torque) == np.ndarray:
             torque = torque[0]
 
-        v_theta = np.array([d, 0, 1]).T # hand frame
+        v_theta = np.array([d, 0, 0]).T # hand frame
         v_h = np.array([-1, 0, 0]) # hand frame
         v_g = np.array([1, 0, 0]) # world_frame
 
@@ -96,10 +96,10 @@ class Controller:
         # Add the linear equality constraint
         prog.AddLinearEqualityConstraint(A_eq, b_eq, vars)
 
-        # delta_x_tar_range = np.array([.1, .1, .05])
-        # for i in range(3):
-        #     prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
-        #     prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
+        delta_x_tar_range = np.array([.05, .05, .01])
+        for i in range(3):
+            prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
+            prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
 
         solver_options = SolverOptions()
         
