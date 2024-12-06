@@ -33,9 +33,9 @@ p.setJointMotorControl2(robotId, 1, p.VELOCITY_CONTROL, force=0)
 p.setJointMotorControl2(robotId, 2, p.VELOCITY_CONTROL, force=0)
 
 # simulation parameters
-p.changeDynamics(objId, -1, lateralFriction=.1)
+p.changeDynamics(objId, -1, lateralFriction=10)
 p.changeDynamics(robotId, -1, lateralFriction=10)
-p.changeDynamics(planeId, -1, lateralFriction=10)
+p.changeDynamics(planeId, -1, lateralFriction=1)
 objFriction = p.getDynamicsInfo(objId, -1)[1]
 planeFriction = p.getDynamicsInfo(planeId, -1)[1]
 robotFriction = p.getDynamicsInfo(robotId, -1)[1]
@@ -48,12 +48,19 @@ w_lim = np.array([200, 200, 200])
 K = 10*np.array([[1, 0, 0],
                 [0, 1, 0],
                 [0, 0, 1]])
-ws = [[0, -10, 0]]
-for i in range(10):
-    for j in range(10):
-        ws.append([10, -10, 0])
-    for j in range(10):
-        ws.append([-15, -10, 0])
+ws = []
+for i in range(50):
+    ws.append([0, -100, 2])
+for i in range(50):
+    ws.append([100, -100, 15])
+# for i in range(1000):
+#     ws.append([50, -100, -5])
+
+# for i in range(10):
+#     for j in range(10):
+#         ws.append([10, -10, 0])
+#     for j in range(10):
+#         ws.append([-15, -10, 0])
 
 estimator = Estimator(.05, .1, .1)
 

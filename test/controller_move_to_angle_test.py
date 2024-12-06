@@ -49,7 +49,7 @@ l = robot_aabb_max[1] - robot_aabb_min[1]
 controller = Controller(l, 
                         w_lim, 
                         K, 
-                        lambda_theta=100, 
+                        lambda_theta=1000, 
                         lambda_x_tar=1, 
                         hand_sliding_constraint_on=True, 
                         hand_pivoting_constraint_on=True, 

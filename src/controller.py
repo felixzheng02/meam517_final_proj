@@ -8,7 +8,7 @@ import numpy as np
 
 class Controller:
 
-    def __init__(self, l, w_lim=100*np.identity(3), K=np.identity(3), lambda_theta=100, lambda_x_tar=1, hand_sliding_constraint_on=True, hand_pivoting_constraint_on=True, ground_sliding_constraint_on=True, w_lim_on=True):
+    def __init__(self, l, w_lim=100*np.identity(3), K=np.identity(3), lambda_theta=100, lambda_x_tar=1, hand_sliding_constraint_on=True, hand_pivoting_constraint_on=True, ground_sliding_constraint_on=True, w_lim_on=True, delta_x_tar_lim_on=True):
         self.lambda_theta = lambda_theta
         self.lambda_x_tar = lambda_x_tar
         self.l = l
@@ -18,6 +18,7 @@ class Controller:
         self.hand_pivoting_constraint_on = hand_pivoting_constraint_on
         self.ground_sliding_constraint_on = ground_sliding_constraint_on
         self.w_lim_on = w_lim_on
+        self.delta_x_tar_lim_on = delta_x_tar_lim_on
 
 
     def control(self, theta_tar, sh_tar, d, sh, fw, fr, torque, mu_h, mu_g, theta):
@@ -29,7 +30,7 @@ class Controller:
         if type(torque) == np.ndarray:
             torque = torque[0]
 
-        v_theta = np.array([d, 0, 0]).T # hand frame
+        v_theta = np.array([d, -sh, 1]).T # hand frame
         v_h = np.array([-1, 0, 0]) # hand frame
         v_g = np.array([1, 0, 0]) # world_frame
 
@@ -40,15 +41,13 @@ class Controller:
         delta_f = prog.NewContinuousVariables(2, 'delta_f') # [2,] world frame
         delta_f_r = prog.NewContinuousVariables(2, 'delta_f_r') # hand frame
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
-        delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame
-
-        # if delta_theta < 1e-5:
-        #     lambda_x_tar *= 10
-        # elif delta_theta > 0.01:
-        #     lambda_x_tar = 0       
+        delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame     
         
         # Existing cost on angular deviation
-        prog.AddQuadraticCost(self.lambda_theta * (theta + delta_x_tar.T @ v_theta - theta_tar) ** 2 + self.lambda_x_tar * delta_x_tar.T @ delta_x_tar)
+        prog.AddQuadraticCost(self.lambda_theta * (-delta_theta*v_theta + delta_x_tar).T @ (-delta_theta*v_theta + delta_x_tar)
+                              + self.lambda_x_tar * delta_x_tar.T @ delta_x_tar)
+                            #   + 0 * delta_f_r.T @ delta_f_r
+                            #   + 0 * delta_torque ** 2)
         # New regularization terms to penalize large adjustments
         # prog.AddQuadraticCost(lambda_f_r * delta_f_r.T @ delta_f_r)
         # prog.AddQuadraticCost(lambda_x_tar * delta_x_tar.T @ delta_x_tar)
@@ -89,13 +88,16 @@ class Controller:
         b_eq = np.zeros(3)
         prog.AddLinearEqualityConstraint(A_eq, b_eq, np.concatenate((delta_f_r, delta_torque, delta_x_tar)))
 
-        delta_x_tar_range = np.array([.1, .1, .01])
-        for i in range(3):
-            prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
-            prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
+        if self.delta_x_tar_lim_on:
+            delta_x_tar_range = np.array([.1, .1, .01])
+            if abs(delta_theta) < np.pi/6:
+                delta_x_tar_range = .5 * delta_x_tar_range
+            for i in range(3):
+                prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
+                prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
 
         solver_options = SolverOptions()
-        solver = SnoptSolver()
+        # solver = SnoptSolver()
 
         # solver = MosekSolver()
         # solver_options.SetOption(solver.solver_id(), "MSK_IPAR_LOG", 15)  # Set verbosity level
@@ -103,38 +105,43 @@ class Controller:
         # solver_options.SetOption(solver.solver_id(), "MSK_IPAR_INFEAS_REPORT_LEVEL", 2)
         # solver_options.get_print_to_console()
 
-        # solver = ScsSolver()
-        # solver_options.SetOption(solver.solver_id(), "verbose", True)
+        solver = ScsSolver()
+        solver_options.SetOption(solver.solver_id(), "verbose", False)
         
         result = solver.Solve(prog, None, solver_options)
         if not result.is_success():
             solver_details = result.get_solver_details()
             solution_status = result.get_solution_result()
             print("Solver status:", solution_status)
-            infeasible_constraints = result.GetInfeasibleConstraints(prog)
-            print("---------------")
-            for constraint_binding in infeasible_constraints:
-                print(constraint_binding)
-                constraint = constraint_binding.evaluator()
-                variables = constraint_binding.variables()
-                print(f"Constraint type: {type(constraint)}")
-                print(f"Involved variables: {variables}")
+            # infeasible_constraints = result.GetInfeasibleConstraints(prog)
+            # print("---------------")
+            # for constraint_binding in infeasible_constraints:
+            #     print(constraint_binding)
+            #     constraint = constraint_binding.evaluator()
+            #     variables = constraint_binding.variables()
+            #     print(f"Constraint type: {type(constraint)}")
+            #     print(f"Involved variables: {variables}")
 
-                # Evaluate the constraint violation
-                constraint_value = constraint.Eval(result.GetSolution(variables))
-                print(f"Constraint value: {constraint_value}")
-                print(f"Lower bound: {constraint.lower_bound()}")
-                print(f"Upper bound: {constraint.upper_bound()}")
-                print("---------------")
+            #     # Evaluate the constraint violation
+            #     constraint_value = constraint.Eval(result.GetSolution(variables))
+            #     print(f"Constraint value: {constraint_value}")
+            #     print(f"Lower bound: {constraint.lower_bound()}")
+            #     print(f"Upper bound: {constraint.upper_bound()}")
+            #     print("---------------")
             raise Exception
         
         optimal_cost = result.get_optimal_cost()
         delta_f_sol = result.GetSolution(delta_f)
+        delta_f_r_sol = result.GetSolution(delta_f_r)
         delta_torque_sol = result.GetSolution(delta_torque)
         delta_x_tar_sol = result.GetSolution(delta_x_tar)
         if np.any(np.isnan(delta_f_sol)) or np.any(np.isnan(delta_torque_sol)) or np.any(np.isnan(delta_x_tar_sol)):
             print("Nan detected")
             raise Exception
+        if fr[0]*delta_theta > 0:
+            delta_f_sol = .01 * delta_f_sol
+        else:
+            delta_f_sol = 5 * delta_f_sol
         return delta_f_sol, delta_torque_sol, delta_x_tar_sol, optimal_cost
     
 def add_hand_sliding_constraints(prog, mu_h, fn, ft, delta_f_r, gammas):

@@ -11,7 +11,7 @@ def world_to_robot_frame(input, theta):
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot(data, d=1, labels=None):
+def plot(data, d=1, labels=None, plot=True):
     """
     Plots each column of the input data array over time steps.
 
@@ -40,4 +40,5 @@ def plot(data, d=1, labels=None):
     plt.xlabel('Time Steps')
     plt.ylabel('Values')
     plt.title('Plot of Data Columns Over Time')
-    plt.show()
+    if plot:
+        plt.show()
