@@ -8,7 +8,8 @@ import numpy as np
 
 class Controller:
 
-    def __init__(self, l, w_lim=100*np.identity(3), K=np.identity(3), lambda_theta=100, lambda_x_tar=1, hand_sliding_constraint_on=True, hand_pivoting_constraint_on=True, ground_sliding_constraint_on=True, w_lim_on=True, delta_x_tar_lim_on=True):
+    def __init__(self, l, w_lim=100*np.identity(3), K=np.identity(3), lambda_theta=100, lambda_x_tar=1, 
+                 hand_sliding_constraint_on=True, hand_pivoting_constraint_on=True, ground_sliding_constraint_on=True, w_lim_on=True, delta_x_tar_lim_on=True, momentum_control_on=False):
         self.lambda_theta = lambda_theta
         self.lambda_x_tar = lambda_x_tar
         self.l = l
@@ -19,6 +20,8 @@ class Controller:
         self.ground_sliding_constraint_on = ground_sliding_constraint_on
         self.w_lim_on = w_lim_on
         self.delta_x_tar_lim_on = delta_x_tar_lim_on
+        self.momentum_control_on = momentum_control_on
+        self.last_delta_theta = 0
 
 
     def control(self, theta_tar, sh_tar, d, sh, fw, fr, torque, mu_h, mu_g, theta):
@@ -43,15 +46,10 @@ class Controller:
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
         delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame     
         
-        # Existing cost on angular deviation
         prog.AddQuadraticCost(self.lambda_theta * (-delta_theta*v_theta + delta_x_tar).T @ (-delta_theta*v_theta + delta_x_tar)
                               + self.lambda_x_tar * delta_x_tar.T @ delta_x_tar)
                             #   + 0 * delta_f_r.T @ delta_f_r
                             #   + 0 * delta_torque ** 2)
-        # New regularization terms to penalize large adjustments
-        # prog.AddQuadraticCost(lambda_f_r * delta_f_r.T @ delta_f_r)
-        # prog.AddQuadraticCost(lambda_x_tar * delta_x_tar.T @ delta_x_tar)
-        # prog.AddQuadraticCost(lambda_torque * delta_torque[0] ** 2)        # prog.AddQuadraticCost((delta_x_tar.T @ v_h - delta_sh) ** 2)
 
         f_grav_j = -9.81
         gammas = 1 * np.array([1, 1, 1, 1, 1, 1])
@@ -64,13 +62,8 @@ class Controller:
         if self.w_lim_on:
             add_w_lim_constraints(prog, w_lim, fw, torque, delta_f, delta_torque)
 
-        R_11 = -np.cos(theta)
-        R_12 = np.sin(theta)
-        R_21 = -np.sin(theta)
-        R_22 = -np.cos(theta)
-
-        prog.AddLinearEqualityConstraint(np.array([[R_11, R_12, -1, 0], 
-                                                   [R_21, R_22, 0, -1]]),
+        prog.AddLinearEqualityConstraint(np.array([[-np.cos(theta), np.sin(theta), -1, 0], 
+                                                   [-np.sin(theta), -np.cos(theta), 0, -1]]),
                                          np.zeros(2), 
                                          np.concatenate((delta_f_r, delta_f)))
         
@@ -90,8 +83,8 @@ class Controller:
 
         if self.delta_x_tar_lim_on:
             delta_x_tar_range = np.array([.1, .1, .01])
-            if abs(delta_theta) < np.pi/6:
-                delta_x_tar_range = .5 * delta_x_tar_range
+            # if abs(delta_theta) < np.pi/6:
+            #     delta_x_tar_range = .5 * delta_x_tar_range
             for i in range(3):
                 prog.AddConstraint(delta_x_tar[i] >= -delta_x_tar_range[i])
                 prog.AddConstraint(delta_x_tar[i] <= delta_x_tar_range[i])
@@ -138,12 +131,70 @@ class Controller:
         if np.any(np.isnan(delta_f_sol)) or np.any(np.isnan(delta_torque_sol)) or np.any(np.isnan(delta_x_tar_sol)):
             print("Nan detected")
             raise Exception
-        if fr[0]*delta_theta > 0:
-            delta_f_sol = .01 * delta_f_sol
-        else:
-            delta_f_sol = 5 * delta_f_sol
+        if self.momentum_control_on:
+            delta_f_sol, delta_torque_sol = self.momentum_control(delta_f_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim)
+        self.last_delta_theta = delta_theta
         return delta_f_sol, delta_torque_sol, delta_x_tar_sol, optimal_cost
-    
+
+    def momentum_control(self, delta_f_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim):
+        if abs(delta_theta) - abs(self.last_delta_theta) > 0: # moving away from target
+            delta_f_tar = 2 * delta_f_sol
+            if ft*delta_theta < 0: # force not overturned to correct direction
+                delta_f_tar = 3 * delta_f_tar
+        else: # moving towards target
+            if delta_f_sol[0]*delta_theta > .1:
+                delta_f_tar = .5 * delta_f_sol
+            else:
+                delta_f_tar = -12 * np.ones(2)
+
+        delta_f_tar = delta_f_tar.reshape([2, 1])
+        prog = MathematicalProgram()
+        delta_f_adjusted = prog.NewContinuousVariables(2, 'delta_f_adjusted')
+        delta_f_r_adjusted = prog.NewContinuousVariables(2, 'delta_f_r_adjusted') # hand frame
+        delta_torque_adjusted = prog.NewContinuousVariables(1, 'delta_torque_adjusted')    
+        
+        lambda_f = 100
+        lambda_torque = 1
+        prog.AddQuadraticCost(lambda_f * ((delta_f_adjusted - delta_f_tar).T @ (delta_f_adjusted - delta_f_tar))[0, 0]
+                              + lambda_torque * delta_torque_adjusted[0] ** 2)
+
+        f_grav_j = -9.81
+        gammas = 1 * np.array([1, 1, 1, 1, 1, 1])
+        if self.hand_sliding_constraint_on:
+            add_hand_sliding_constraints(prog, mu_h, fn, ft, delta_f_r_adjusted, gammas)
+        if self.hand_pivoting_constraint_on:
+            add_hand_pivoting_constraints(prog, self.l, fn, torque, delta_f_r_adjusted, delta_torque_adjusted, gammas)
+        if self.ground_sliding_constraint_on:
+            add_ground_sliding_constraints(prog, mu_g, fi, fj, f_grav_j, delta_f_adjusted, gammas)
+        if self.w_lim_on:
+            add_w_lim_constraints(prog, w_lim, np.array([fi, fj]), torque, delta_f_adjusted, delta_torque_adjusted)
+
+        prog.AddLinearEqualityConstraint(np.array([[-np.cos(theta), np.sin(theta), -1, 0], 
+                                                   [-np.sin(theta), -np.cos(theta), 0, -1]]),
+                                         np.zeros(2), 
+                                         np.concatenate((delta_f_r_adjusted, delta_f_adjusted)))
+        
+        solver_options = SolverOptions()
+        solver = ScsSolver()
+        solver_options.SetOption(solver.solver_id(), "verbose", False)
+        
+        result = solver.Solve(prog, None, solver_options)
+        if not result.is_success():
+            solver_details = result.get_solver_details()
+            solution_status = result.get_solution_result()
+            print("Solver status:", solution_status)
+            raise Exception
+        
+        optimal_cost = result.get_optimal_cost()
+        delta_f_sol = result.GetSolution(delta_f_adjusted)
+        delta_f_r_sol = result.GetSolution(delta_f_r_adjusted)
+        delta_torque_sol = result.GetSolution(delta_torque_adjusted)
+        if np.any(np.isnan(delta_f_sol)) or np.any(np.isnan(delta_torque_sol)) or np.any(np.isnan(delta_f_r_sol)):
+            print("Nan detected")
+            raise Exception
+        return delta_f_sol, delta_torque_sol
+        
+
 def add_hand_sliding_constraints(prog, mu_h, fn, ft, delta_f_r, gammas):
     hand_sliding_constraint_0 = mu_h * (fn+gammas[0]*delta_f_r[1]) + (ft+gammas[0]*delta_f_r[0])
     hand_sliding_constraint_1 = mu_h * (fn+gammas[1]*delta_f_r[1]) - (ft+gammas[1]*delta_f_r[0])

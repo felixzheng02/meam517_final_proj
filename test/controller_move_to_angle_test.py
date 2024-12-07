@@ -41,7 +41,7 @@ K = K_scalar * np.array([[1, 0, 0],
                     [0, 1, 0],
                     [0, 0, 1]])
 steps = 10000
-theta_s = [np.pi/30, -np.pi/30]
+theta_s = [np.pi/30, -np.pi/30, np.pi/30]
 theta_tar_idx = 0
 sh_s = [0]*steps
 robot_aabb_min, robot_aabb_max = p.getAABB(robotId)
@@ -54,7 +54,8 @@ controller = Controller(l,
                         hand_sliding_constraint_on=True, 
                         hand_pivoting_constraint_on=True, 
                         ground_sliding_constraint_on=True, 
-                        w_lim_on=True)
+                        w_lim_on=True,
+                        momentum_control_on=True)
 mu_h = 10
 mu_g = 10
 p.changeDynamics(objId, -1, lateralFriction=mu_h)
@@ -82,6 +83,8 @@ torque_scale = 0.05  # Scale for the torque vector
 
 try:
     for i in range(steps):
+        if i == 50:
+            pass
         p.removeAllUserDebugItems()
 
         obj_pos_ori = p.getBasePositionAndOrientation(objId)

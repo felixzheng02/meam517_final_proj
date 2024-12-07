@@ -157,7 +157,7 @@ for i in range(steps):
 #     print("Exception happened.")
 #     p.disconnect()
 
-plot(np.array(delta_thetas), 1, ['delta_theta'], True)
-plot(np.array(w_hist), 3, ['fy', 'fz', 'torque'], True)
+# plot(np.array(delta_thetas), 1, ['delta_theta'], True)
+plot(np.array(w_hist)[:, :2], 2, ['force in I direction', 'force in J direction'], True)
 # plt.savefig(f"figures/controller_stablizing_test_K{K_scalar}_lambda_theta{lambda_theta}_no_x_tar_lim.png")
 
