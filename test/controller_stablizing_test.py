@@ -59,7 +59,8 @@ controller = Controller(l,
                         hand_pivoting_constraint_on=True, 
                         ground_sliding_constraint_on=True, 
                         w_lim_on=True,
-                        delta_x_tar_lim_on=True)
+                        delta_x_tar_lim_on=True,
+                        momentum_control_on=True)
 mu_h = 10
 mu_g = 10
 p.changeDynamics(objId, -1, lateralFriction=mu_h)
@@ -157,7 +158,7 @@ for i in range(steps):
 #     print("Exception happened.")
 #     p.disconnect()
 
-# plot(np.array(delta_thetas), 1, ['delta_theta'], True)
+plot(np.array(delta_thetas), 1, ['delta_theta'], True)
 plot(np.array(w_hist)[:, :2], 2, ['force in I direction', 'force in J direction'], True)
 # plt.savefig(f"figures/controller_stablizing_test_K{K_scalar}_lambda_theta{lambda_theta}_no_x_tar_lim.png")
 

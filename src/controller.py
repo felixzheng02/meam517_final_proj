@@ -132,22 +132,24 @@ class Controller:
             print("Nan detected")
             raise Exception
         if self.momentum_control_on:
-            delta_f_sol, delta_torque_sol = self.momentum_control(delta_f_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim)
+            delta_f_sol, delta_torque_sol = self.momentum_control(delta_f_r_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim)
         self.last_delta_theta = delta_theta
         return delta_f_sol, delta_torque_sol, delta_x_tar_sol, optimal_cost
 
-    def momentum_control(self, delta_f_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim):
+    def momentum_control(self, delta_f_r_sol, delta_theta, mu_h, mu_g, theta, ft, fn, fi, fj, torque, w_lim):
+        delta_ft = delta_f_r_sol[0]
         if abs(delta_theta) - abs(self.last_delta_theta) > 0: # moving away from target
-            delta_f_tar = 2 * delta_f_sol
+            delta_ft_tar = 2 * delta_ft
             if ft*delta_theta < 0: # force not overturned to correct direction
-                delta_f_tar = 3 * delta_f_tar
+                delta_ft_tar = 3 * delta_ft_tar
         else: # moving towards target
-            if delta_f_sol[0]*delta_theta > .1:
-                delta_f_tar = .5 * delta_f_sol
-            else:
-                delta_f_tar = -12 * np.ones(2)
+            if delta_ft*delta_theta > .1:
+                delta_ft_tar = .5 * delta_ft
+            else: # == 0, never < 0
+                delta_ft_tar = -10
+                
+                
 
-        delta_f_tar = delta_f_tar.reshape([2, 1])
         prog = MathematicalProgram()
         delta_f_adjusted = prog.NewContinuousVariables(2, 'delta_f_adjusted')
         delta_f_r_adjusted = prog.NewContinuousVariables(2, 'delta_f_r_adjusted') # hand frame
@@ -155,7 +157,7 @@ class Controller:
         
         lambda_f = 100
         lambda_torque = 1
-        prog.AddQuadraticCost(lambda_f * ((delta_f_adjusted - delta_f_tar).T @ (delta_f_adjusted - delta_f_tar))[0, 0]
+        prog.AddQuadraticCost(lambda_f * (delta_f_r_adjusted[0] - delta_ft_tar)**2
                               + lambda_torque * delta_torque_adjusted[0] ** 2)
 
         f_grav_j = -9.81
