@@ -46,7 +46,7 @@ class Controller:
         delta_torque = prog.NewContinuousVariables(1, 'delta_torque')
         delta_x_tar = prog.NewContinuousVariables(3, 'delta_x_tar') # hand frame     
         
-        prog.AddQuadraticCost(self.lambda_theta * (-delta_theta*v_theta + delta_x_tar).T @ (-delta_theta*v_theta + delta_x_tar)
+        prog.AddQuadraticCost((-self.lambda_theta*delta_theta*v_theta + self.lambda_theta*delta_x_tar).T @ (-self.lambda_theta*delta_theta*v_theta + self.lambda_theta*delta_x_tar)
                               + self.lambda_x_tar * delta_x_tar.T @ delta_x_tar)
                             #   + 0 * delta_f_r.T @ delta_f_r
                             #   + 0 * delta_torque ** 2)

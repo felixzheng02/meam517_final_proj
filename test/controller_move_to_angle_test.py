@@ -161,5 +161,6 @@ try:
 except:
     p.disconnect()
 
+# print(theta_tar_hist)
 plot(np.array([theta_hist, theta_tar_hist]).T, 2, ['theta', 'theta_tar'])
-plot(np.array(w_hist), 3, ['fy', 'fz', 'torque'])
+# plot(np.array(w_hist), 3, ['fy', 'fz', 'torque'])
