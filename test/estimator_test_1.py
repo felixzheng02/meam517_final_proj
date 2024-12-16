@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, '/Users/felix/Desktop/meam5170/final_project/src')
 from controller import Controller
+from estimator import Estimator
 from utils import world_to_robot_frame, plot
 import numpy as np
 import pybullet as p
@@ -33,7 +34,7 @@ robotId = p.loadURDF("src/urdf/robot.urdf",
                         baseOrientation=p.getQuaternionFromEuler(robotStartOrientation), 
                         useFixedBase=True)
 
-w_lim = 300 * np.array([1, 1, 1])
+w_lim = np.array([400, 1000, 300])
 
 K_scalar = 1000
 
@@ -41,9 +42,9 @@ K = K_scalar * np.array([[1, 0, 0],
                     [0, 1, 0],
                     [0, 0, 1]])
 steps = 10000
-theta_s = [np.pi/30, -np.pi/30, np.pi/30, -np.pi/30, np.pi/30]
+theta_s = [np.pi/30, -np.pi/30, np.pi/30, -np.pi/30]
 theta_tar_idx = 0
-sh_s = [0]*steps
+
 robot_aabb_min, robot_aabb_max = p.getAABB(robotId)
 l = robot_aabb_max[1] - robot_aabb_min[1]
 controller = Controller(l, 
@@ -55,9 +56,10 @@ controller = Controller(l,
                         hand_pivoting_constraint_on=True, 
                         ground_sliding_constraint_on=True, 
                         w_lim_on=True,
-                        momentum_control_on=False)
-mu_h = 10
-mu_g = 10
+                        momentum_control_on=True)
+estimator = Estimator(l, .1, .1)
+mu_h = 1
+mu_g = 1
 p.changeDynamics(objId, -1, lateralFriction=mu_h)
 p.changeDynamics(robotId, -1, lateralFriction=mu_g)
 p.changeDynamics(planeId, -1, lateralFriction=mu_g)
@@ -79,7 +81,10 @@ d = obj_aabb_max[2] - obj_aabb_min[2]
 force_scale = 10  # Scale for the force vector
 torque_scale = 0.05  # Scale for the torque vector
 
+mu_s = []
+xo_yo_d_sh_s = []
 
+sh_s = []
 
 try:
     for i in range(steps):
@@ -117,6 +122,18 @@ try:
         # print(w)
         w_hist.append(w.copy())
         cost_hist.append(optimal_cost)
+
+        sh_s.append(sh)
+
+        fr = world_to_robot_frame(w[:2], theta)
+        hand_mu, ground_mu = estimator.est_mu(fr[0], fr[1], w[0], w[1])
+        mu_s.append([hand_mu, ground_mu])
+        xo, yo, d, sh = estimator.kinemitcs_est(hand_pos, theta)
+        xo_yo_d_sh_s.append([xo, yo, d, sh])
+
+        print(f"hand_mu={hand_mu:.3f},  ground_mu={ground_mu:.3f}")
+        print(f"xo={xo:.3f}, yo={yo:.3f}, d={d:.3f}, sh={d:.3f}")
+
         p.setJointMotorControl2(robotId, 0, p.TORQUE_CONTROL, force=w[0])
         p.setJointMotorControl2(robotId, 1, p.TORQUE_CONTROL, force=w[1])
         p.setJointMotorControl2(robotId, 2, p.TORQUE_CONTROL, force=w[2])
@@ -159,8 +176,11 @@ try:
 except:
     p.disconnect()
 
-print(theta_tar_hist)
-print("###########################")
-print(theta_hist)
-# plot(np.array([theta_hist, theta_tar_hist]).T, 2, ['theta', 'theta_tar'])
-# plot(np.array(w_hist), 3, ['fy', 'fz', 'torque'])
+
+print(mu_s)
+print('################################')
+print(xo_yo_d_sh_s)
+print('################################')
+print(sh_s)
+# plot(np.array(mu_s), 2, ['hand_mu', 'ground_mu'])
+# plot(np.array(xo_yo_d_sh_s), 4, ['xo', 'yo', 'd', 'sh'])
